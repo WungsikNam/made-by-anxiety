@@ -18303,7 +18303,7 @@ this.b=b},
 X5:function X5(a,b,c){this.a=a
 this.b=b
 this.c=c},
-X4:function X4(){},
+X4:function X4(a){this.a=a},
 WR:function WR(a){this.a=a},
 X9:function X9(a){this.a=a},
 X6:function X6(a){this.a=a},
@@ -54533,9 +54533,9 @@ if(!s)A.yz()}},
 QD(a){var s,r=this
 if(a!==B.Z)return
 if(r.w!==B.cq)return
-if(++r.as>=5)r.Sn()
-else{r.a9(new A.X4())
-s=r.z
+r.a9(new A.X4(r))
+if(r.as>=5)r.Sn()
+else{s=r.z
 s===$&&A.c()
 s.EL(0)}},
 LQ(){var s=this
@@ -54703,7 +54703,7 @@ s.f=this.b
 s.r=this.c},
 $S:0}
 A.X4.prototype={
-$0(){},
+$0(){return this.a.as++},
 $S:0}
 A.WR.prototype={
 $0(){return this.a.x++},
