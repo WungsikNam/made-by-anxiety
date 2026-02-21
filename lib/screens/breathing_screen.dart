@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:vibration/vibration.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_theme.dart';
@@ -252,28 +253,41 @@ class _BreathingScreenState extends State<BreathingScreen>
     }
   }
 
-  void _hapticForPhase(String phase) {
+  void _hapticForPhase(String phase) async {
+    if (!_breathingOn) return;
     _hapticTimer?.cancel();
+    
+    final hasVibrator = await Vibration.hasVibrator() ?? false;
+    final hasCustomVibrator = await Vibration.hasCustomVibrationsSupport() ?? false;
+
     if (phase.contains('Breathe in')) {
-      // Accelerating rumble
-      int count = 0;
-      _hapticTimer = Timer.periodic(const Duration(milliseconds: 300), (timer) {
-        count++;
-        if (count > 10) timer.cancel();
-        HapticFeedback.lightImpact();
-      });
-      HapticFeedback.mediumImpact(); 
+      if (hasCustomVibrator) {
+        Vibration.vibrate(
+          pattern: [0, 150, 800, 200, 800, 250, 800, 300], 
+          intensities: [0, 64, 0, 128, 0, 192, 0, 255]
+        );
+      } else if (hasVibrator) {
+        Vibration.vibrate(pattern: [0, 100, 800, 100, 800, 100, 800, 200]);
+      } else {
+        HapticFeedback.mediumImpact();
+      }
     } else if (phase.contains('Top')) {
-      HapticFeedback.selectionClick();
+      if (hasVibrator) {
+        Vibration.vibrate(duration: 150, amplitude: 255);
+      } else {
+        HapticFeedback.selectionClick();
+      }
     } else if (phase.contains('Breathe out')) {
-      // Fading soft tap
-      int count = 0;
-      _hapticTimer = Timer.periodic(const Duration(milliseconds: 600), (timer) {
-         count++;
-         if (count > 8) timer.cancel();
-         HapticFeedback.lightImpact();
-      });
-      HapticFeedback.lightImpact();
+      if (hasCustomVibrator) {
+        Vibration.vibrate(
+          pattern: [0, 300, 1000, 200, 1000, 150, 1000, 100, 1000, 50], 
+          intensities: [0, 255, 0, 192, 0, 128, 0, 64, 0, 32]
+        );
+      } else if (hasVibrator) {
+        Vibration.vibrate(pattern: [0, 300, 1000, 200, 1000, 100, 1000, 50]);
+      } else {
+        HapticFeedback.lightImpact();
+      }
     }
   }
 
@@ -571,6 +585,7 @@ void _advanceGrounding() {
 
   @override
   Widget build(BuildContext context) {
+    final isWatch = MediaQuery.of(context).size.height < 400 || MediaQuery.of(context).size.width < 300;
     return PopScope(
       canPop: true,
       onPopInvoked: (_) => _writeSessionLog(),
@@ -587,7 +602,7 @@ void _advanceGrounding() {
             child: Stack(
               children: [
                 // ① "Made by Anxiety" — top left, very small
-                Positioned(
+                if (!isWatch) Positioned(
                   top: 20,
                   left: 20,
                   child: Text(
@@ -604,18 +619,21 @@ void _advanceGrounding() {
                       Stack(
                         alignment: Alignment.center,
                         children: [
-                          FluidBreathShape(
-                            animation: (_appPhase == _AppPhase.simpleBreath ||
-                                    _appPhase == _AppPhase.grounding)
-                                ? _simpleScale
-                                : _breathScale,
-                            fluidColor: _fluidColor.value ?? AppColors.fluidAnxious,
+                          Transform.scale(
+                            scale: isWatch ? 0.7 : 1.0,
+                            child: FluidBreathShape(
+                              animation: (_appPhase == _AppPhase.simpleBreath ||
+                                      _appPhase == _AppPhase.grounding)
+                                  ? _simpleScale
+                                  : _breathScale,
+                              fluidColor: _fluidColor.value ?? AppColors.fluidAnxious,
+                            ),
                           ),
                           if ((_appPhase == _AppPhase.simpleBreath || _appPhase == _AppPhase.mainBreath) && _countdownSeconds > 0)
                             Text(
                               '$_countdownSeconds',
                               style: AppTextStyles.breathInstruction.copyWith(
-                                fontSize: 40,
+                                fontSize: isWatch ? 28 : 40,
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.textPrimary,
                               ),
@@ -639,13 +657,13 @@ void _advanceGrounding() {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
-                          _buildControl(
+                          if (!isWatch) _buildControl(
                             icon: _audioOn ? Icons.volume_up_rounded : Icons.volume_off_rounded,
                             active: _audioOn,
                             label: 'sound',
                             onTap: _toggleAudio,
                           ),
-                          _buildControl(
+                          if (!isWatch) _buildControl(
                             icon: _breathingOn ? Icons.air_rounded : Icons.pause_rounded,
                             active: _breathingOn,
                             label: 'breathing',
@@ -661,7 +679,7 @@ void _advanceGrounding() {
                               _startGroundingPhase();
                             },
                           ),
-                          _buildControl(
+                          if (!isWatch) _buildControl(
                             icon: Icons.home_rounded,
                             active: true,
                             label: 'home',

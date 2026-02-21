@@ -54,6 +54,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   @override
   Widget build(BuildContext context) {
+    final isWatch = MediaQuery.of(context).size.height < 400 || MediaQuery.of(context).size.width < 300;
     return Scaffold(
       backgroundColor: AppColors.backgroundAnxious,
       body: GestureDetector(
@@ -63,9 +64,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           children: [
             // Background Fluid Effect
             Center(
-               child: FluidBreathShape(
-                  animation: _idleScale,
-                  fluidColor: AppColors.fluidAnxious,
+               child: Transform.scale(
+                 scale: isWatch ? 0.7 : 1.0,
+                 child: FluidBreathShape(
+                    animation: _idleScale,
+                    fluidColor: AppColors.fluidAnxious,
+                 ),
                ),
             ),
             
@@ -91,7 +95,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             ),
             
             // Top Text Elements
-            SafeArea(
+            if (!isWatch) SafeArea(
               child: Align(
                 alignment: Alignment.topCenter,
                 child: Padding(
