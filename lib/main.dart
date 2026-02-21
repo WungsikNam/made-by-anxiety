@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'theme/app_theme.dart';
-import 'screens/breathing_screen.dart';
+import 'screens/home_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,7 +22,7 @@ class MadeByAnxietyApp extends StatelessWidget {
       title: 'Made by Anxiety',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dark,
-      home: const BreathingScreen(),
+      home: const HomeScreen(),
     );
   }
 }

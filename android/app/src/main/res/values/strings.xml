@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shortcut_breathe_short">SOS Breathe</string>
+    <string name="shortcut_breathe_long">Breathe Right Now</string>
+    <string name="shortcut_breathe_disabled">Shortcut disabled</string>
+</resources>

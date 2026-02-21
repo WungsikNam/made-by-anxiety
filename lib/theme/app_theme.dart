@@ -1,36 +1,39 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
-/// Made by Anxiety — Design System
+/// Made by Anxiety — Design System (Enhanced)
 class AppColors {
   AppColors._();
 
-  // --- Background ---
-  static const Color background = Color(0xFF111111);    // near-black charcoal
+  // --- Background (Eclipse) ---
+  static const Color backgroundAnxious = Color(0xFF000000); // True OLED Black
+  static const Color backgroundCalm = Color(0xFF040404);
+  static const Color background = backgroundAnxious; // Default
 
-  // --- Breathing circle ---
-  static const Color breathCircle = Color(0xFF787878);      // warm gray
-  static const Color breathCircleGlow = Color(0x18AAAAAA);  // very subtle glow
+  // --- Eclipse Ring (Dynamic) ---
+  static const Color fluidAnxious = Color(0xFF7A7A7A); // Visible dim ring
+  static const Color fluidCalm = Color(0xFFFFFFFF);    // Pure white ring
 
   // --- Text ---
   static const Color textPrimary = Color(0xB3FFFFFF);    // 70% white
   static const Color textBrand = Color(0x40FFFFFF);      // 25% white (branding)
-  static const Color textHint = Color(0x66FFFFFF);       // 40% white
+  static const Color textHint = Color(0x4DFFFFFF);       // 30% white
 
   // --- Icons ---
-  static const Color iconActive = Color(0xE6FFFFFF);     // 90% white
+  static const Color iconActive = Color(0xFFE8B4B8);       // Soft Pink/Lavender active tint
   static const Color iconInactive = Color(0x4DFFFFFF);   // 30% white
 
   // --- Legacy aliases (used by old screens, kept for safety) ---
   static const Color sos = Color(0xFFE8534A);
   static const Color panicBg = Color(0xFF000000);
-  static const Color mainBg = Color(0xFF111111);
+  static const Color mainBg = Color(0xFF0A0A0A);
   static const Color textSecondary = Color(0xB3FFFFFF);
 }
 
 class AppTextStyles {
   AppTextStyles._();
 
-  static const TextStyle sosLabel = TextStyle(
+  static TextStyle sosLabel = GoogleFonts.lora(
     fontSize: 22,
     fontWeight: FontWeight.w600,
     color: AppColors.textPrimary,
@@ -38,24 +41,45 @@ class AppTextStyles {
     height: 1.3,
   );
 
-  static const TextStyle breathInstruction = TextStyle(
-    fontSize: 18,
-    fontWeight: FontWeight.w300,
-    color: AppColors.textSecondary,
+  static TextStyle breathInstruction = GoogleFonts.raleway(
+    fontSize: 26, // Increased size for better visibility and impact
+    fontWeight: FontWeight.w400, // Slightly bolder for emphasis
+    color: AppColors.textPrimary,
     letterSpacing: 1.2,
-    height: 1.5,
+    height: 1.6,
   );
 
-  static const TextStyle groundingText = TextStyle(
-    fontSize: 16,
-    fontWeight: FontWeight.w400,
+  static TextStyle groundingText = GoogleFonts.raleway(
+    fontSize: 22,
+    fontWeight: FontWeight.w300,
     color: AppColors.textPrimary,
     height: 1.6,
-    letterSpacing: 0.2,
+    letterSpacing: 0.3,
   );
 
-  static const TextStyle groundingHint = TextStyle(
+  static TextStyle groundingHint = GoogleFonts.raleway(
     fontSize: 13,
+    fontWeight: FontWeight.w300,
+    color: AppColors.textHint,
+    letterSpacing: 0.3,
+  );
+
+  static TextStyle controlLabel = GoogleFonts.raleway( // New style for control labels
+    fontSize: 10,
+    fontWeight: FontWeight.w300,
+    color: AppColors.textHint, // Use textHint for consistency
+    letterSpacing: 0.5,
+  );
+
+  static TextStyle trustCardQuote = GoogleFonts.raleway( // New style for trust card quote
+    fontSize: 13,
+    fontWeight: FontWeight.w300,
+    color: AppColors.textPrimary,
+    height: 1.7,
+  );
+
+  static TextStyle trustCardSource = GoogleFonts.raleway( // New style for trust card source
+    fontSize: 11,
     fontWeight: FontWeight.w300,
     color: AppColors.textHint,
     letterSpacing: 0.3,
@@ -65,13 +89,13 @@ class AppTextStyles {
 class AppDurations {
   AppDurations._();
 
-  // Calm: 600~800ms (여유) → Panic Zero: 즉각 반응 우선
   static const Duration tapResponse = Duration(milliseconds: 150);
-  static const Duration screenTransition = Duration(milliseconds: 250);
-  static const Duration breatheIn = Duration(seconds: 4);   // 생리적 한숨: 코 흡기
+  static const Duration screenTransition = Duration(milliseconds: 300);
+  static const Duration breatheIn = Duration(seconds: 4);
   static const Duration breatheHold = Duration(milliseconds: 1500);
-  static const Duration breatheOut = Duration(seconds: 6);  // 긴 날숨
-  static const Duration groundingFade = Duration(milliseconds: 300);
+  static const Duration breatheOut = Duration(seconds: 6);
+  static const Duration groundingFade = Duration(milliseconds: 400);
+  static const Duration controlTapAnimation = Duration(milliseconds: 100); // For subtle tap feedback
 }
 
 class AppTheme {
@@ -80,8 +104,9 @@ class AppTheme {
   static ThemeData get dark => ThemeData(
     brightness: Brightness.dark,
     scaffoldBackgroundColor: AppColors.background,
+    textTheme: GoogleFonts.ralewayTextTheme(ThemeData.dark().textTheme),
     colorScheme: const ColorScheme.dark(
-      primary: AppColors.breathCircle,
+      primary: AppColors.fluidAnxious,
       surface: AppColors.background,
     ),
     splashFactory: NoSplash.splashFactory,

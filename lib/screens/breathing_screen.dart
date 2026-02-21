@@ -5,9 +5,11 @@ import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_theme.dart';
 import '../constants/audio_assets.dart';
-import '../widgets/breath_circle.dart';
+import '../widgets/fluid_breath_shape.dart';
+import 'home_screen.dart';
 
 enum _AppPhase { intro, simpleBreath, grounding, mainBreath }
 
@@ -25,35 +27,44 @@ class _BreathingScreenState extends State<BreathingScreen>
   late AnimationController _breathController;
   late Animation<double> _breathScale;
 
-  static const _inhale = 'Breathe in.';
-  static const _topUp = 'And in.';
-  static const _exhale = 'Out.';
+  static const _inhale = 'Breathe in for 4s';
+  static const _topUp = 'Top-up for 2s';
+  static const _exhale = 'Breathe out for 6s';
   static const _idle = 'Breathe right now.';
 
   String _displayText = _idle;
   int _countdownSeconds = 0;
 
-  // ── Onboarding phase ───────────────────────────
-  _AppPhase _appPhase = _AppPhase.intro;
+  // ── Onboarding phase (Bypassed for Seamless Launch) ─
+  _AppPhase _appPhase = _AppPhase.mainBreath; // CHANGED: Start directly in main breath
   int _introStep = 0; // 0=message, 1/2/3=count
   Timer? _introTimer;
   late AnimationController _simpleController;
   late Animation<double> _simpleScale;
   int _simpleCycles = 0;
-  static const int _totalSimpleCycles = 5;
+  static const int _totalSimpleCycles = 4;
 
   // ── Controls ───────────────────────────────────
   bool _breathingOn = true;
   bool _audioOn = true;
+
+  // ── Dynamic Color & Haptics ────────────────────
+  late AnimationController _colorController;
+  late Animation<Color?> _bgColor;
+  late Animation<Color?> _fluidColor;
+  Timer? _hapticTimer;
 
   // ── Reality Grounding ──────────────────────────
   bool _groundingActive = false;
   int _groundingTurn = 0;
 
   static const _groundingCopy = [
-    'Name one thing\nyou can see.',
-    'One more thing\nyou can see.',
-    "That's enough.\nStay here.",
+    '1. Visual Anchor\nLook around. Name 5 things you can see.',
+    '2. Physical Anchor\nTouch 4 things and notice their texture.',
+    '3. Auditory Anchor\nListen closely. Name 3 sounds you hear.',
+    '4. Olfactory Anchor\nBreathe in. Name 2 things you can smell.',
+    '5. Gustatory Anchor\nFocus on your mouth. 1 thing you can taste.',
+    "The storm is passing.\nYou are safe here.",
   ];
 
   // ── Audio ──────────────────────────────────────
@@ -75,8 +86,11 @@ class _BreathingScreenState extends State<BreathingScreen>
   ];
   int _trustQuoteIndex = 0;
 
-  // ── 개선 1: Web start overlay ──────────────────
-  bool _showStartOverlay = kIsWeb;
+  // ── 개선 1: Web start overlay (Disabled for immediate action)
+  bool _showStartOverlay = false;
+
+  // ── Haptic feedback hint ─────────────────────
+  bool _showHapticHint = false;
 
   // ── 개선 2: 2초 호흡 레이블 지연 ───────────────
   Timer? _breathStartTimer;
@@ -96,10 +110,22 @@ class _BreathingScreenState extends State<BreathingScreen>
     _initAudio();
     _initBreathing();
     _initSimpleBreath();
-    // trust card / icon hints are started in _startMainBreath()
+    
+    _colorController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 90),
+    );
+    _bgColor = ColorTween(
+      begin: AppColors.backgroundAnxious,
+      end: AppColors.backgroundCalm,
+    ).animate(_colorController)..addListener(() => setState(() {}));
+    _fluidColor = ColorTween(
+      begin: AppColors.fluidAnxious,
+      end: AppColors.fluidCalm,
+    ).animate(_colorController);
 
-    // Web: intro starts after user tap. Native: start immediately.
-    if (!kIsWeb) _startIntro();
+    // Start with Intro Onboarding instead of Main Breath
+    _startIntro();
   }
 
   @override
@@ -127,11 +153,13 @@ class _BreathingScreenState extends State<BreathingScreen>
     _breathController.removeListener(_onBreathTick);
     _breathController.dispose();
     _simpleController.dispose();
+    _colorController.dispose();
     _audioPlayer.dispose();
     _trustCardTimer?.cancel();
     _breathStartTimer?.cancel();
     _iconHintTimer?.cancel();
     _introTimer?.cancel();
+    _hapticTimer?.cancel();
     WakelockPlus.disable();
     super.dispose();
   }
@@ -225,9 +253,26 @@ class _BreathingScreenState extends State<BreathingScreen>
   }
 
   void _hapticForPhase(String phase) {
-    if (phase == _topUp) {
+    _hapticTimer?.cancel();
+    if (phase.contains('Breathe in')) {
+      // Accelerating rumble
+      int count = 0;
+      _hapticTimer = Timer.periodic(const Duration(milliseconds: 300), (timer) {
+        count++;
+        if (count > 10) timer.cancel();
+        HapticFeedback.lightImpact();
+      });
+      HapticFeedback.mediumImpact(); 
+    } else if (phase.contains('Top')) {
       HapticFeedback.selectionClick();
-    } else {
+    } else if (phase.contains('Breathe out')) {
+      // Fading soft tap
+      int count = 0;
+      _hapticTimer = Timer.periodic(const Duration(milliseconds: 600), (timer) {
+         count++;
+         if (count > 8) timer.cancel();
+         HapticFeedback.lightImpact();
+      });
       HapticFeedback.lightImpact();
     }
   }
@@ -259,7 +304,7 @@ class _BreathingScreenState extends State<BreathingScreen>
   void _onSimpleTick() {
     if (_appPhase != _AppPhase.simpleBreath) return;
     final t = _simpleController.value;
-    final newText = t < 0.5 ? _inhale : 'Breathe out.';
+    final newText = t < 0.5 ? 'Breathe in for 4s' : 'Breathe out for 4s';
     final newCd = t < 0.5
         ? ((0.5 - t) * 8).ceil().clamp(1, 4)
         : ((1.0 - t) * 8).ceil().clamp(1, 4);
@@ -270,7 +315,7 @@ class _BreathingScreenState extends State<BreathingScreen>
         _displayText = newText;
         _countdownSeconds = newCd;
       });
-      if (textChanged) HapticFeedback.lightImpact();
+      if (textChanged) _hapticForPhase(newText);
     }
   }
 
@@ -279,7 +324,8 @@ class _BreathingScreenState extends State<BreathingScreen>
     if (_appPhase != _AppPhase.simpleBreath) return;
     _simpleCycles++;
     if (_simpleCycles >= _totalSimpleCycles) {
-      _startGroundingPhase();
+      // 4 cycles simple -> move to main breath
+      _startMainBreath();
     } else {
       setState(() {});
       _simpleController.forward(from: 0.0);
@@ -287,17 +333,12 @@ class _BreathingScreenState extends State<BreathingScreen>
   }
 
   void _startIntro() {
-    _introTimer = Timer(const Duration(seconds: 2), _advanceIntro);
+    // Bypassed 5-second intro to provide immediate relief
+    _startSimpleBreath();
   }
 
   void _advanceIntro() {
-    if (!mounted) return;
-    setState(() => _introStep++);
-    if (_introStep < 4) {
-      _introTimer = Timer(const Duration(seconds: 1), _advanceIntro);
-    } else {
-      _startSimpleBreath();
-    }
+    // Deprecated
   }
 
   void _startSimpleBreath() {
@@ -306,6 +347,10 @@ class _BreathingScreenState extends State<BreathingScreen>
       _simpleCycles = 0;
       _displayText = _inhale;
       _countdownSeconds = 4;
+      _showHapticHint = true;
+    });
+    Timer(const Duration(seconds: 4), () {
+      if (mounted) setState(() => _showHapticHint = false);
     });
     _simpleController.forward();
   }
@@ -323,24 +368,43 @@ class _BreathingScreenState extends State<BreathingScreen>
     if (!mounted) return;
     final next = _groundingTurn + 1;
     if (next >= _groundingCopy.length) {
-      _startMainBreath();
+      _goHome();
     } else {
       setState(() => _groundingTurn = next);
     }
   }
+
+  int _mainCycles = 0;
+  static const int _totalMainCycles = 4;
 
   void _startMainBreath() {
     setState(() {
       _appPhase = _AppPhase.mainBreath;
       _displayText = _idle;
       _countdownSeconds = 0;
+      _mainCycles = 0;
     });
-    _breathController.repeat();
+    
+    // Listen for cycle completion
+    _breathController.addStatusListener(_onMainStatus);
+    
+    _breathController.forward(from: 0.0);
+    _colorController.forward(); // Start dynamic color shift
     _initTrustCard();
     _initIconHints();
-    _breathStartTimer = Timer(const Duration(seconds: 2), () {
-      if (mounted) _breathController.addListener(_onBreathTick);
-    });
+    _breathController.addListener(_onBreathTick);
+  }
+  
+  void _onMainStatus(AnimationStatus status) {
+    if (status != AnimationStatus.completed) return;
+    if (_appPhase != _AppPhase.mainBreath) return;
+    _mainCycles++;
+    if (_mainCycles >= _totalMainCycles) {
+      _breathController.removeStatusListener(_onMainStatus);
+      _startGroundingPhase();
+    } else {
+      _breathController.forward(from: 0.0);
+    }
   }
 
   // ── Controls ──────────────────────────────────
@@ -348,9 +412,14 @@ class _BreathingScreenState extends State<BreathingScreen>
   void _toggleBreathing() {
     setState(() => _breathingOn = !_breathingOn);
     if (_breathingOn) {
-      _breathController.repeat();
+      if (_appPhase == _AppPhase.mainBreath) {
+        _breathController.forward(from: _breathController.value == 1.0 ? 0.0 : _breathController.value);
+      } else if (_appPhase == _AppPhase.simpleBreath) {
+        _simpleController.forward(from: _simpleController.value == 1.0 ? 0.0 : _simpleController.value);
+      }
     } else {
       _breathController.stop();
+      _simpleController.stop();
       setState(() {
         _countdownSeconds = 0;
         if (!_groundingActive) _displayText = 'Rest here.';
@@ -440,12 +509,24 @@ void _advanceGrounding() {
     } catch (_) {}
   }
 
-  // ── Exit ──────────────────────────────────────
+  // ── Home Redirect ─────────────────────────────
 
-  void _exit() {
+  void _goHome() {
     _writeSessionLog();
-    if (!kIsWeb) {
-      SystemNavigator.pop();
+    _breathController.stop();
+    _simpleController.stop();
+    HapticFeedback.lightImpact();
+    WakelockPlus.disable();
+    if (mounted) {
+      Navigator.of(context).pushReplacement(
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) => const HomeScreen(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+          transitionDuration: const Duration(milliseconds: 800),
+        ),
+      );
     }
   }
 
@@ -469,20 +550,15 @@ void _advanceGrounding() {
             AnimatedOpacity(
               opacity: opacity ?? (active ? 0.85 : 0.28),
               duration: const Duration(milliseconds: 200),
-              child: Icon(icon, color: Colors.white, size: 22),
+              child: Icon(icon, color: active ? AppColors.iconActive : AppColors.iconInactive, size: 22),
             ),
             const SizedBox(height: 6),
             AnimatedOpacity(
-              opacity: _showIconHints ? 0.35 : 0.0,
-              duration: const Duration(milliseconds: 500),
+              opacity: _showIconHints ? 1.0 : 0.0, // Always show label if hints are active
+              duration: AppDurations.controlTapAnimation, // Use new duration for smoother hint animation
               child: Text(
                 label,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w300,
-                  letterSpacing: 0.5,
-                ),
+                style: AppTextStyles.controlLabel,
               ),
             ),
           ],
@@ -499,7 +575,7 @@ void _advanceGrounding() {
       canPop: true,
       onPopInvoked: (_) => _writeSessionLog(),
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: _bgColor.value ?? AppColors.backgroundAnxious,
         body: GestureDetector(
           onTap: () {
             if (kIsWeb && _audioReady && !_firstInteractionDone && _audioOn) {
@@ -511,17 +587,12 @@ void _advanceGrounding() {
             child: Stack(
               children: [
                 // ① "Made by Anxiety" — top left, very small
-                const Positioned(
+                Positioned(
                   top: 20,
                   left: 20,
                   child: Text(
                     'Made by Anxiety',
-                    style: TextStyle(
-                      color: AppColors.textBrand,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w300,
-                      letterSpacing: 0.8,
-                    ),
+                    style: AppTextStyles.groundingHint.copyWith(color: AppColors.textBrand), // Use existing style, adjust color
                   ),
                 ),
 
@@ -530,14 +601,26 @@ void _advanceGrounding() {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      BreathCircle(
-                        animation: (_appPhase == _AppPhase.simpleBreath ||
-                                _appPhase == _AppPhase.grounding)
-                            ? _simpleScale
-                            : _breathScale,
-                        countdown: _appPhase == _AppPhase.simpleBreath
-                            ? _countdownSeconds
-                            : 0,
+                      Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          FluidBreathShape(
+                            animation: (_appPhase == _AppPhase.simpleBreath ||
+                                    _appPhase == _AppPhase.grounding)
+                                ? _simpleScale
+                                : _breathScale,
+                            fluidColor: _fluidColor.value ?? AppColors.fluidAnxious,
+                          ),
+                          if ((_appPhase == _AppPhase.simpleBreath || _appPhase == _AppPhase.mainBreath) && _countdownSeconds > 0)
+                            Text(
+                              '$_countdownSeconds',
+                              style: AppTextStyles.breathInstruction.copyWith(
+                                fontSize: 40,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                        ],
                       ),
                       const SizedBox(height: 44),
                       ..._buildCenterContent(),
@@ -545,37 +628,47 @@ void _advanceGrounding() {
                   ),
                 ),
 
-                // ③ Bottom controls — only in mainBreath
-                if (_appPhase == _AppPhase.mainBreath)
+                // ③ Bottom controls — available in both breathing phases
+                if (_appPhase == _AppPhase.mainBreath || _appPhase == _AppPhase.simpleBreath)
                   Positioned(
                     bottom: 32,
                     left: 0,
                     right: 0,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _buildControl(
-                          icon: _audioOn ? Icons.volume_up_rounded : Icons.volume_off_rounded,
-                          active: _audioOn,
-                          label: 'sound',
-                          onTap: _toggleAudio,
-                        ),
-                        const SizedBox(width: 36),
-                        _buildControl(
-                          icon: _breathingOn ? Icons.air_rounded : Icons.pause_rounded,
-                          active: _breathingOn,
-                          label: 'breathing',
-                          onTap: _toggleBreathing,
-                        ),
-                        const SizedBox(width: 36),
-                        _buildControl(
-                          icon: Icons.close_rounded,
-                          active: false,
-                          label: 'leave',
-                          opacity: kIsWeb ? 0.1 : 0.28,
-                          onTap: _exit,
-                        ),
-                      ],
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _buildControl(
+                            icon: _audioOn ? Icons.volume_up_rounded : Icons.volume_off_rounded,
+                            active: _audioOn,
+                            label: 'sound',
+                            onTap: _toggleAudio,
+                          ),
+                          _buildControl(
+                            icon: _breathingOn ? Icons.air_rounded : Icons.pause_rounded,
+                            active: _breathingOn,
+                            label: 'breathing',
+                            onTap: _toggleBreathing,
+                          ),
+                          _buildControl(
+                            icon: Icons.anchor,
+                            active: true,
+                            label: 'anchor',
+                            onTap: () {
+                              _breathController.stop();
+                              _simpleController.stop();
+                              _startGroundingPhase();
+                            },
+                          ),
+                          _buildControl(
+                            icon: Icons.home_rounded,
+                            active: true,
+                            label: 'home',
+                            onTap: _goHome,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
 
@@ -634,26 +727,15 @@ void _advanceGrounding() {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Text(
+                              Text(
                                 'Made by Anxiety',
-                                style: TextStyle(
-                                  color: Color(0x30FFFFFF),
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w300,
-                                  letterSpacing: 0.8,
-                                ),
+                                style: AppTextStyles.groundingHint.copyWith(color: AppColors.textBrand), // Use existing style, adjust color
                               ),
                               const SizedBox(height: 32),
                               Text(
                                 'Tap anywhere\nto begin.',
                                 textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.45),
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w300,
-                                  height: 1.9,
-                                  letterSpacing: 0.3,
-                                ),
+                                style: AppTextStyles.breathInstruction.copyWith(color: AppColors.textHint), // Use existing style, adjust color
                               ),
                             ],
                           ),
@@ -679,23 +761,16 @@ void _advanceGrounding() {
           transitionBuilder: (child, anim) =>
               FadeTransition(opacity: anim, child: child),
           child: _introStep == 0
-              ? const Text(
-                  'Focus on\nyour breathing.',
-                  key: ValueKey('msg'),
+              ? Text(
+                  'Get ready.',
+                  key: const ValueKey('msg'),
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w300,
-                    height: 1.6,
-                    letterSpacing: 0.3,
-                  ),
+                  style: AppTextStyles.breathInstruction,
                 )
               : Text(
-                  '$_introStep',
+                  '${4 - _introStep}',
                   key: ValueKey(_introStep),
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
+                  style: AppTextStyles.breathInstruction.copyWith(
                     fontSize: 56,
                     fontWeight: FontWeight.w100,
                     letterSpacing: 8,
@@ -708,29 +783,25 @@ void _advanceGrounding() {
     if (_appPhase == _AppPhase.grounding) {
       return [
         AnimatedSwitcher(
-          duration: const Duration(milliseconds: 400),
+          duration: AppDurations.groundingFade,
           transitionBuilder: (child, anim) =>
               FadeTransition(opacity: anim, child: child),
           child: Text(
             _groundingCopy[_groundingTurn],
             key: ValueKey(_groundingTurn),
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 22,
-              fontWeight: FontWeight.w300,
-              height: 1.6,
-              letterSpacing: 0.3,
-            ),
+            style: AppTextStyles.groundingText,
           ),
         ),
         const SizedBox(height: 16),
-        const Text(
-          'tap anywhere',
-          style: TextStyle(
-            color: Color(0x33FFFFFF),
-            fontSize: 11,
-            fontWeight: FontWeight.w300,
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 500),
+          child: Text(
+            _groundingTurn >= _groundingCopy.length - 1
+                ? 'tap to finish'
+                : 'tap anywhere',
+            key: ValueKey('hint_$_groundingTurn'),
+            style: AppTextStyles.groundingHint,
           ),
         ),
       ];
@@ -746,23 +817,26 @@ void _advanceGrounding() {
             _displayText,
             key: ValueKey(_displayText),
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 22,
-              fontWeight: FontWeight.w300,
-              height: 1.6,
-              letterSpacing: 0.3,
-            ),
+            style: AppTextStyles.breathInstruction,
           ),
         ),
         const SizedBox(height: 16),
         Text(
-          '${_simpleCycles + 1} of $_totalSimpleCycles',
-          style: const TextStyle(
-            color: Color(0x33FFFFFF),
-            fontSize: 12,
-            fontWeight: FontWeight.w300,
-            letterSpacing: 2,
+          '${_simpleCycles + 1} / $_totalSimpleCycles',
+          style: AppTextStyles.groundingHint.copyWith(letterSpacing: 2),
+        ),
+        AnimatedOpacity(
+          opacity: _showHapticHint ? 1.0 : 0.0,
+          duration: const Duration(milliseconds: 800),
+          child: Padding(
+            padding: const EdgeInsets.only(top: 24),
+            child: Text(
+              'Hold device for haptics',
+              style: AppTextStyles.groundingHint.copyWith(
+                color: AppColors.textBrand.withOpacity(0.8),
+                letterSpacing: 2.0,
+              ),
+            ),
           ),
         ),
       ];
@@ -778,24 +852,19 @@ void _advanceGrounding() {
           _displayText,
           key: ValueKey(_displayText),
           textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 22,
-            fontWeight: FontWeight.w300,
-            height: 1.6,
-            letterSpacing: 0.3,
-          ),
+          style: AppTextStyles.breathInstruction,
         ),
+      ),
+      const SizedBox(height: 16),
+      Text(
+        '${_mainCycles + 1} / $_totalMainCycles',
+        style: AppTextStyles.groundingHint.copyWith(letterSpacing: 2),
       ),
       if (_groundingActive) ...[
         const SizedBox(height: 16),
         Text(
           _groundingTurn < 2 ? 'tap anywhere' : 'tap to return',
-          style: const TextStyle(
-            color: Color(0x33FFFFFF),
-            fontSize: 11,
-            fontWeight: FontWeight.w300,
-          ),
+          style: AppTextStyles.groundingHint,
         ),
       ],
     ];
@@ -809,7 +878,7 @@ void _advanceGrounding() {
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.fromLTRB(20, 16, 16, 20),
       decoration: BoxDecoration(
-        color: const Color(0xFF1C1C1C),
+        color: const Color(0xFF121212), // Slightly lighter than background
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
@@ -821,22 +890,12 @@ void _advanceGrounding() {
               children: [
                 Text(
                   quote.$1,
-                  style: const TextStyle(
-                    color: Color(0xB3FFFFFF),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w300,
-                    height: 1.7,
-                  ),
+                  style: AppTextStyles.trustCardQuote,
                 ),
                 const SizedBox(height: 8),
                 Text(
                   '— ${quote.$2}',
-                  style: const TextStyle(
-                    color: Color(0x66FFFFFF),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w300,
-                    letterSpacing: 0.3,
-                  ),
+                  style: AppTextStyles.trustCardSource,
                 ),
               ],
             ),
@@ -845,7 +904,7 @@ void _advanceGrounding() {
             onTap: _closeTrustCard,
             child: const Padding(
               padding: EdgeInsets.all(4),
-              child: Icon(Icons.close_rounded, color: Color(0x4DFFFFFF), size: 16),
+              child: Icon(Icons.close_rounded, color: AppColors.iconInactive, size: 16),
             ),
           ),
         ],

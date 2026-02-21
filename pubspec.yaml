@@ -33,10 +33,10 @@ dependencies:
   cupertino_icons: ^1.0.6
 
   # 오디오 (빗소리 재생)
-  just_audio: ^0.9.36
+  just_audio: ^0.10.5
 
   # 햅틱 진동
-  haptic_feedback: ^0.5.0
+  haptic_feedback: ^0.6.4+3
 
   # 화면 켜짐 유지 (Panic Mode 중 꺼지지 않도록)
   wakelock_plus: ^1.1.4
@@ -44,7 +44,9 @@ dependencies:
   # 호흡법 사전 설정 저장
   shared_preferences: ^2.2.2
   camera: ^0.11.0+2
-  permission_handler: ^11.3.1
+  permission_handler: ^12.0.1
+  google_fonts: ^8.0.2 # Added google_fonts dependency
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:
@@ -55,7 +57,7 @@ dev_dependencies:
   # activated in the `analysis_options.yaml` file located at the root of your
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
-  flutter_lints: ^3.0.0
+  flutter_lints: ^6.0.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
